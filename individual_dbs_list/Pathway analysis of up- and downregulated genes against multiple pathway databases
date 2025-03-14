@@ -1,0 +1,58 @@
+# perform pathway analysis using multiple pathway genesets
+msigdb_gs <- geneset::getMsigdb(org = "mouse", category = "H")
+go_gs <- geneset::getGO(org = "mouse", ont = "bp")
+kegg_gs <- geneset::getKEGG(org = "mus", category = "pathway")
+react_gs <- geneset::getReactome(org = "mouse")
+
+gene_set = list(msigdb_gs, go_gs, kegg_gs, react_gs)
+
+#empty lists for adding in the pathway results
+barplots_1 <- list()
+df1 = NULL
+
+for (i in 1:length(gene_set)) {
+  go_results1 = safely(genORA)(res1 %>% filter(enrichment == "Heart") %>% pull(gene),
+                               geneset = gene_set[[i]],
+                               p_cutoff = 1, #to retrieve the whole output
+                               q_cutoff = 1, #to retrieve the whole output
+                               universe = rownames(res1))$result
+  
+  if (!is.null(go_results1)) {
+    go_results1$geneset = gene_set[[i]]$type
+    go_results1$enrichment = "Heart"
+  }
+  
+  go_results2 = safely(genORA)(res1 %>% filter(enrichment == "Liver") %>% pull(gene),
+                               geneset = gene_set[[i]],
+                               p_cutoff = 1, #to retrieve the whole output
+                               q_cutoff = 1, #to retrieve the whole output
+                               universe = rownames(res1))$result
+  
+  if (!is.null(go_results2)) {
+    go_results2$geneset = gene_set[[i]]$type
+    go_results2$enrichment = "Liver"
+  }
+  
+  df1 <- rbind_common(df1, go_results1, go_results2)
+  
+  if (!is.null(go_results1) & !is.null(go_results2)) {
+  p1 <- plotEnrich(go_results1,
+                   plot_type = "bar",
+                   n_term = 10,
+                   term_metric = "FoldEnrich",
+                   stats_metric = "qvalue")
+  p2 <- plotEnrich(go_results2,
+                   plot_type = "bar",
+                   n_term = 10,
+                   term_metric = "FoldEnrich",
+                   stats_metric = "qvalue")
+  barplots_1[[i]] <- p1 + p2
+  
+  }
+}
+
+#plot pathway profile
+if (!is.null(df1)) {
+  print(tidyheatmap(df = df1 %>% filter(p.adjust < 0.05) %>% mutate(p.adjust = -log10(p.adjust)) %>% arrange(geneset) %>% remove_rownames(), color_legend_n = 1, color_legend_min = 0, color_legend_max = 1.3,rows = Description, columns = enrichment, values = p.adjust, annotation_row = geneset, gaps_row = geneset, gaps_col = enrichment
+))
+  }
