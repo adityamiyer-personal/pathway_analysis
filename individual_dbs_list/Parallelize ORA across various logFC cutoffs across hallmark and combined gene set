@@ -1,0 +1,98 @@
+msigdb_gs$geneset <- msigdb_gs$geneset %>% rename(id = gs_name, gene = entrez_gene)
+go_gs$geneset <- go_gs$geneset %>% rename(id = bp)
+
+gene_set = list(kegg_gs, 
+                react_gs, 
+                msigdb_gs,
+                #go_gs,
+                new_gs)
+df_logfc <- NULL
+
+for (fc in c(0.5, 1, 2, 3)) {
+  
+  for (i in 1:length(gene_set)) {
+    
+    go_results_ms <- safely(genORA)(res %>% as.data.frame() %>% dplyr::filter(log2FoldChange < -fc & padj < 0.01) %>%
+                              rownames_to_column("gene") %>%
+                              pull(gene),
+                            universe = res %>% as.data.frame() %>% filter(baseMean != 0) %>% rownames_to_column(var = "gene") %>% pull(gene),
+                            geneset = gene_set[[i]]
+                            )$result
+    
+                  
+    
+    if (!is.null(go_results_ms)) {
+      go_results_ms$species <- "mouse"
+      go_results_ms$logfc <- fc
+      go_results_ms$geneset <- gene_set[[i]]$type
+      }
+  
+  
+  go_results_espl <- safely(genORA)(id = res %>% as.data.frame() %>% dplyr::filter(log2FoldChange > fc & padj < 0.01) %>% 
+                          rownames_to_column("gene") %>%
+                          pull(gene), 
+                        universe = res %>% as.data.frame() %>% filter(baseMean != 0) %>% rownames_to_column(var = "gene") %>% pull(gene),
+                        geneset = gene_set[[i]]
+                        )$result
+  
+  if (!is.null(go_results_espl)) {
+    go_results_espl$species <- "bat"
+    go_results_espl$logfc <- fc
+    go_results_espl$geneset <- gene_set[[i]]$type
+  }
+  
+  df1 <- rbind(go_results_espl, go_results_ms)
+  
+  df_logfc <- rbind(df_logfc, subset(df1 %>% rownames_to_column("id"), select = c("p.adjust", "Description", "species", "logfc", "geneset")))
+  #df_logfc <- plyr::rbind.fill(df_logfc, df1)
+  #df_logfc <- gtools::smartbind(df_logfc, df1)
+  
+  }
+  
+}
+
+
+nat1 =  df_logfc %>% 
+  drop_na(p.adjust) %>%
+  dplyr::filter(p.adjust < 0.05) %>% 
+  dplyr::select(p.adjust, Description, species,geneset, logfc) %>% #ID
+  #dplyr::mutate(ID = gsub("HALLMARK_","",ID)) %>%
+  pivot_wider(names_from = c("species", "geneset", "logfc"), values_from = p.adjust, values_fill = 1) %>% 
+  column_to_rownames("Description") %>% #ID
+  dplyr::mutate_all(~ pval_adj(.)) %>% 
+  #dplyr::select(starts_with("ESPL"), starts_with("mouse")) %>% 
+  as.matrix() 
+
+#df11 = tibble(group = colnames(nat1)) %>% tidyr::separate(col = group, into = c("species","cell_type"), sep = "_",remove = F) %>% column_to_rownames("group") %>% dplyr::filter(rownames(.) %in% colnames(nat1)) %>% dplyr::select(species)
+
+#col_anno <- HeatmapAnnotation(df = data.frame(species = colnames(nat1)),
+                              col = list(species = c("bat" = "lightblue", "mouse" = "orange")))
+
+Heatmap(nat1, 
+        cluster_columns = F, 
+        cluster_rows = T,
+        #top_annotation = col_anno,
+        col = circlize::colorRamp2(c(0,1.3), c("lightgrey","red")), 
+        column_title = "Significant pathways enriched \nin either ESPL or Mouse hearts",
+        heatmap_legend_param = list(title = "-log10(padj)"),
+        #column_split = c(rep("bat",7), rep("human",3)),
+        #column_km = 3,
+        row_names_gp = grid::gpar(fontsize = 8),
+        show_row_dend = F)
+
+tidyheatmap(df = df_logfc %>% filter(p.adjust < 0.05) %>% dplyr::mutate(p.adjust = pval_adj(p.adjust)) %>%
+            arrange(species, geneset, logfc, Description),
+            rows = Description,
+            columns = c(species,geneset, logfc),
+            values = p.adjust,
+            #scale = "row",
+            #annotation_col = c(sample_type, condition, group),
+            #annotation_row = c(is_immune_gene, direction),
+            #gaps_row = direction,
+            #color_legend_min = 0,
+            color_legend_max = 1.3,
+            color_legend_n = 1,
+            fontsize_row = 8,
+            fontsize_col = 12,
+            gaps_col = c(species)
+)
