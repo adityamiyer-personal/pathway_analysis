@@ -1,0 +1,78 @@
+hg_gs <- geneset::getGO(org = "human", ont = "bp")
+#hg_gs <- geneset::getMsigdb(org = "human", category = "H")
+#hg_gs <- geneset::getReactome(org = "human")
+#hg_gs <- geneset::getMsigdb(org = "mouse", category = "C2-CP-REACTOME")
+#hg_gs <- geneset::getEnrichrdb(org = "human", library = "Panther_2016")
+
+kegg_gs <- geneset::getKEGG(org = "human",category = 'pathway')
+react_gs <- geneset::getReactome(org = "human")
+msigdb_gs <- geneset::getMsigdb(org = "human", category = "H")
+go_gs <- geneset::getGO(org = "human", ont = "bp")
+
+gene_set = list(kegg_gs, 
+                react_gs, 
+                msigdb_gs,
+                go_gs
+                )
+
+#single pathway
+#go_results_bat <- safely(genORA)(gene_loss_kua,
+                            #universe = gene_loss_lew2,
+                            p_cutoff = 0.05,
+                            q_cutoff = 0.15,
+                            geneset = hg_gs
+                            )$result
+
+plotEnrich(go_results_bat, plot_type = "bar")
+
+#multiple pathway databases
+df1 = NULL
+
+for (i in 1:length(gene_set)) {
+    
+    go_results_bat <- safely(genORA)(gene_loss_kua,
+                            #universe = gene_loss_lew2,
+                            p_cutoff = 1.0,
+                            q_cutoff = 1.0,
+                            geneset = gene_set[[i]]
+                            )$result
+    
+    if (!is.null(go_results_bat)) {
+      #go_results_bat$species <- "human"
+      #go_results_bat$logfc <- fc
+      go_results_bat$geneset <- gene_set[[i]]$type
+    }
+    
+    df1 = eatTools::rbind_common(df1, go_results_bat)
+    
+    
+}
+
+writexl::write_xlsx(df1 %>% remove_rownames(), "~/Bulk_RNAseq/bats_vs_humanGTEX/07_csv_outputs/PathwayAnalysis_65geneloss_multipledatabases.xlsx")
+
+#pathway analysis across databases
+tidyheatmap(df = df1 %>% filter(p.adjust < 0.05) %>% remove_rownames(),
+            rows = c(Description),
+            columns = c(geneset),
+            values = p.adjust,
+            #scale = "row",
+            #annotation_col = c(sample_type, condition, group),
+            annotation_row = geneset,
+            #display_numbers = T,
+            gaps_row = geneset,
+            color_legend_min = 0,
+            color_legend_max = 1.3,
+            #color_legend_n = 1,
+            fontsize_row = 6,
+            fontsize_col = 12,
+            #gaps_col = c(species)
+)
+
+
+plotEnrich(df1 %>% filter(geneset == "bp"), plot_type = "gotangram", sim_method = "Rel")
+
+#Tangram plot
+simMatrix <- calculateSimMatrix(df1 %>% filter(geneset == "bp") %>% rownames(), orgdb="org.Hs.eg.db", ont="BP", method="Rel")
+scores <- setNames(df1 %>% filter(geneset == "bp") %>% mutate(p.adjust = -log10(p.adjust)) %>% pull(p.adjust), df1 %>% filter(geneset == "bp") %>% rownames())
+reducedTerms <- reduceSimMatrix(simMatrix, scores, threshold=0.4, orgdb="org.Hs.eg.db")
+treemapPlot(reducedTerms)
