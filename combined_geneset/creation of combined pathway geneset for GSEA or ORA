@@ -1,0 +1,15 @@
+# perform pathway analysis using multiple pathway genesets
+kegg_gs <- geneset::getKEGG(org = "human",category = 'pathway')
+react_gs <- geneset::getReactome(org = "human")
+msigdb_gs <- geneset::getMsigdb(org = "human", category = "H")
+go_gs <- geneset::getGO(org = "human", ont = "bp")
+
+#combined gene set
+all_gset <- eatTools::rbind_common(kegg_gs$geneset, react_gs$geneset, 
+                  msigdb_gs$geneset %>% rename(id = gs_name, gene = entrez_gene), 
+                  go_gs$geneset %>% rename(id = bp))
+
+all_gsetname <- rbind(kegg_gs$geneset_name, react_gs$geneset_name, msigdb_gs$geneset_name, go_gs$geneset_name)
+
+new_gs <- list(geneset = all_gset, geneset_name = all_gsetname, organism = 'human', type = 'combined')
+saveRDS(new_gs, "~/Documents/BiostateAI/data/combined_gs.rds")
