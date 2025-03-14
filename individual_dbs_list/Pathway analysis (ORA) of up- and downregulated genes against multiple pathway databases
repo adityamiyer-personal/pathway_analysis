@@ -33,7 +33,7 @@ for (i in 1:length(gene_set)) {
     go_results2$enrichment = "Liver"
   }
   
-  df1 <- rbind_common(df1, go_results1, go_results2)
+  df1 <- eatTools::rbind_common(df1, go_results1, go_results2)
   
   if (!is.null(go_results1) & !is.null(go_results2)) {
   p1 <- plotEnrich(go_results1,
