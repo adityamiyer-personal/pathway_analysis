@@ -9,6 +9,7 @@ matrix = from_list(mylist)
 matrix$gene_name = rownames(matrix)
 
 #Upset plot with gene names- open with Zoom to look at the gene names
+#look at SuperExactTest for upset plots
 ComplexUpset::upset(
     matrix,
     intersect=colnames(matrix)[-length(colnames(matrix))],
